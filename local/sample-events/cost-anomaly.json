@@ -1,0 +1,15 @@
+{
+  "schema_version": "v1",
+  "request_id": "req-cost-001",
+  "timestamp": "2026-04-12T10:10:00+00:00",
+  "model": "gpt-4o",
+  "provider": "openai",
+  "prompt": "Write a full technical design document for a distributed system.",
+  "completion": "# Design Document\n\n...(very long output)...",
+  "prompt_tokens": 8000,
+  "completion_tokens": 6000,
+  "latency_ms": 900,
+  "cost_usd": 0.95,
+  "temperature": 0.7,
+  "tags": {"env": "dev", "app": "doc-generator"}
+}

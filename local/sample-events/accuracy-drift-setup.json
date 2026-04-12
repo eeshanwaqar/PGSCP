@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "request_id": "req-drift-001",
+  "timestamp": "2026-04-12T10:20:00+00:00",
+  "model": "llama-3.1-70b",
+  "provider": "self-hosted",
+  "prompt": "Classify: 'Where is my order #12345?'",
+  "completion": "billing_inquiry",
+  "prompt_tokens": 30,
+  "completion_tokens": 2,
+  "latency_ms": 250,
+  "cost_usd": 0.0001,
+  "temperature": 0.0,
+  "expected_label": "order_status",
+  "predicted_label": "billing_inquiry",
+  "tags": {"env": "dev", "app": "email-router", "note": "label_mismatch"}
+}

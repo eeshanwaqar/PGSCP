@@ -1,0 +1,15 @@
+{
+  "schema_version": "v1",
+  "request_id": "req-pii-001",
+  "timestamp": "2026-04-12T10:15:00+00:00",
+  "model": "gpt-4o",
+  "provider": "openai",
+  "prompt": "Draft a reply to the customer based on their profile.",
+  "completion": "Hi John, thanks for reaching out! I'll follow up at john.smith@example.com or 415-555-0199 if we need anything else.",
+  "prompt_tokens": 120,
+  "completion_tokens": 30,
+  "latency_ms": 380,
+  "cost_usd": 0.0009,
+  "temperature": 0.3,
+  "tags": {"env": "dev", "app": "email-router"}
+}

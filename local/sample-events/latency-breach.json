@@ -1,0 +1,15 @@
+{
+  "schema_version": "v1",
+  "request_id": "req-latency-001",
+  "timestamp": "2026-04-12T10:05:00+00:00",
+  "model": "claude-sonnet-4-5",
+  "provider": "anthropic",
+  "prompt": "Summarize this 10-page legal document into bullet points.",
+  "completion": "- Key point 1\n- Key point 2\n- Key point 3",
+  "prompt_tokens": 4200,
+  "completion_tokens": 180,
+  "latency_ms": 4200,
+  "cost_usd": 0.042,
+  "temperature": 0.2,
+  "tags": {"env": "dev", "app": "doc-summarizer"}
+}

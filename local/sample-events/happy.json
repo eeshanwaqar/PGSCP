@@ -1,0 +1,19 @@
+{
+  "schema_version": "v1",
+  "request_id": "req-happy-001",
+  "timestamp": "2026-04-12T10:00:00+00:00",
+  "model": "gpt-4o",
+  "provider": "openai",
+  "prompt": "Classify the intent of: 'Hi, I'd like to cancel my subscription.'",
+  "completion": "cancellation_request",
+  "prompt_tokens": 42,
+  "completion_tokens": 3,
+  "latency_ms": 420,
+  "cost_usd": 0.0012,
+  "temperature": 0.0,
+  "user_id": "user-42",
+  "session_id": "sess-abc",
+  "expected_label": "cancellation_request",
+  "predicted_label": "cancellation_request",
+  "tags": {"env": "dev", "app": "email-router"}
+}
