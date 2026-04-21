@@ -58,3 +58,29 @@ CREATE TABLE IF NOT EXISTS partner_delivery_attempts (
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_partner_alert ON partner_delivery_attempts (alert_id);
+
+CREATE TABLE IF NOT EXISTS investigations (
+    id                            BIGSERIAL PRIMARY KEY,
+    alert_id                      BIGINT       NOT NULL,
+    event_id                      VARCHAR(64)  NOT NULL,
+    model                         VARCHAR(128) NOT NULL,
+    rule                          VARCHAR(64)  NOT NULL,
+    severity                      VARCHAR(16)  NOT NULL,
+    root_cause                    TEXT         NOT NULL,
+    root_cause_label              VARCHAR(64)  NOT NULL,
+    confidence                    DOUBLE PRECISION NOT NULL,
+    report_json                   JSONB        NOT NULL,
+    tool_calls                    INTEGER      NOT NULL DEFAULT 0,
+    verify_loops                  INTEGER      NOT NULL DEFAULT 0,
+    cost_usd                      DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    latency_ms                    INTEGER      NOT NULL DEFAULT 0,
+    llm_backend                   VARCHAR(32)  NOT NULL,
+    llm_model_id                  VARCHAR(128) NOT NULL,
+    feedback_correct              BOOLEAN,
+    feedback_correct_root_cause   VARCHAR(128),
+    feedback_notes                TEXT,
+    created_at                    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_investigations_alert ON investigations (alert_id);
+CREATE INDEX IF NOT EXISTS idx_investigations_model_ts ON investigations (model, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_investigations_root_cause_label ON investigations (root_cause_label);

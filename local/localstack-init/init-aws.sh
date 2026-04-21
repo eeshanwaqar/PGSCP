@@ -5,6 +5,8 @@ set -euo pipefail
 BUCKET="${PGSCP_S3_RAW_BUCKET:-pgscp-raw-events-local}"
 QUEUE="${PGSCP_SQS_QUEUE_NAME:-pgscp-events-local}"
 DLQ="${QUEUE}-dlq"
+INVESTIGATIONS_QUEUE="${PGSCP_INVESTIGATIONS_QUEUE_NAME:-pgscp-investigations-local}"
+INVESTIGATIONS_DLQ="${INVESTIGATIONS_QUEUE}-dlq"
 REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 
 export AWS_ACCESS_KEY_ID=test
@@ -21,4 +23,12 @@ awslocal sqs create-queue \
   --attributes "{\"VisibilityTimeout\":\"60\",\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"${DLQ_ARN}\\\",\\\"maxReceiveCount\\\":\\\"5\\\"}\"}" \
   || true
 
-echo "localstack init: bucket=${BUCKET} queue=${QUEUE} dlq=${DLQ} ready"
+INV_DLQ_URL=$(awslocal sqs create-queue --queue-name "${INVESTIGATIONS_DLQ}" --query QueueUrl --output text)
+INV_DLQ_ARN=$(awslocal sqs get-queue-attributes --queue-url "${INV_DLQ_URL}" --attribute-names QueueArn --query Attributes.QueueArn --output text)
+
+awslocal sqs create-queue \
+  --queue-name "${INVESTIGATIONS_QUEUE}" \
+  --attributes "{\"VisibilityTimeout\":\"180\",\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"${INV_DLQ_ARN}\\\",\\\"maxReceiveCount\\\":\\\"5\\\"}\"}" \
+  || true
+
+echo "localstack init: bucket=${BUCKET} events_queue=${QUEUE} investigations_queue=${INVESTIGATIONS_QUEUE} ready"

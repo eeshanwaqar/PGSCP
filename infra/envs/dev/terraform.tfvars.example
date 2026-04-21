@@ -1,0 +1,19 @@
+# Copy to `terraform.tfvars` (gitignored) and edit before `terraform apply`.
+# S3 bucket names must be globally unique — a common convention is to suffix
+# with your AWS account id.
+
+aws_region       = "us-east-1"
+name_prefix      = "pgscp-dev"
+raw_bucket_name  = "pgscp-raw-events-dev-<account-id>"
+logs_bucket_name = "pgscp-logs-dev-<account-id>"
+
+# Phase 3 — placeholders are fine for a first apply. Rotate via `terraform apply`
+# once you have real credentials. Values are marked sensitive in variables.tf
+# so `terraform plan` will not print them.
+slack_webhook_url     = "http://placeholder.invalid/slack"
+pagerduty_routing_key = "not-a-real-pagerduty-key"
+
+# RDS — dev defaults are cost-minimal. Prod should override.
+db_instance_class      = "db.t4g.micro"
+db_multi_az            = false
+db_deletion_protection = false

@@ -67,6 +67,37 @@ def _to_rule_input(raw: dict, event_id: str) -> rules.InferenceInput:
     )
 
 
+def _enqueue_investigations(alert_rows: list[Alert]) -> None:
+    s = get_settings()
+    if not s.investigations_queue_url:
+        return
+    log = get_logger(__name__)
+    sqs = _aws_client("sqs")
+    for alert in alert_rows:
+        if alert.severity != "critical":
+            continue
+        try:
+            resp = sqs.send_message(
+                QueueUrl=s.investigations_queue_url,
+                MessageBody=json.dumps(
+                    {
+                        "alert_id": alert.id,
+                        "event_id": alert.event_id,
+                        "rule": alert.rule,
+                        "severity": alert.severity,
+                    }
+                ),
+            )
+            log.info(
+                "worker.investigation_enqueued",
+                alert_id=alert.id,
+                rule=alert.rule,
+                sqs_message_id=resp.get("MessageId"),
+            )
+        except Exception:
+            log.exception("worker.investigation_enqueue_failed", alert_id=alert.id)
+
+
 def _deliver_alerts(session: Session, alert_rows: list[Alert]) -> None:
     s = get_settings()
     clients = []
@@ -153,6 +184,9 @@ def _process_message(session: Session, msg: dict) -> None:
         _deliver_alerts(session, alert_rows)
 
     session.commit()
+
+    if alert_rows:
+        _enqueue_investigations(alert_rows)
 
 
 def run_once() -> int:

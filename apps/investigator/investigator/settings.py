@@ -7,36 +7,40 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PGSCP_", env_file=None, extra="ignore")
 
     env: str = "local"
-    service_name: str = "pgscp-worker"
+    service_name: str = "pgscp-investigator"
     log_level: str = "INFO"
 
     aws_region: str = "us-east-1"
     aws_endpoint_url: str = ""
 
     s3_raw_bucket: str = "pgscp-raw-events-local"
-    sqs_queue_url: str = ""
     investigations_queue_url: str = ""
 
-    # Postgres connection (sync). In AWS, the DSN is constructed at startup from
-    # Secrets Manager; locally it comes from docker-compose env.
     db_dsn: str = "postgresql+psycopg://pgscp:pgscp@postgres:5432/pgscp"
 
-    # Rule thresholds — deliberately tunable via env for incident simulations.
-    latency_breach_ms: int = 1500
-    cost_anomaly_threshold_usd: float = 0.50
-    accuracy_drift_floor: float = 0.80
-    stuck_model_window: int = 20
-    missing_heartbeat_minutes: int = 10
-
-    # Partner integrations (pointed at mock-partner in local).
     slack_webhook_url: str = ""
-    pagerduty_url: str = ""
     hmac_signing_key: str = "local-dev-only-not-a-real-secret"
 
-    # SQS long-polling + visibility
     sqs_wait_time_seconds: int = 20
-    sqs_visibility_timeout: int = 60
-    sqs_max_messages: int = 10
+    sqs_visibility_timeout: int = 180
+    sqs_max_messages: int = 1
+
+    llm_backend: str = "scripted"  # scripted | bedrock | openai
+    llm_model_id: str = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    llm_max_tokens: int = 2048
+    llm_temperature: float = 0.2
+    openai_api_key: str = ""
+    openai_base_url: str = ""
+    openai_model: str = "gpt-4o-mini"
+
+    cloudwatch_api_log_group: str = "/pgscp/dev/api"
+    cloudwatch_worker_log_group: str = "/pgscp/dev/worker"
+    ecs_cluster: str = "pgscp-dev"
+
+    graph_verify_max_loops: int = 2
+    graph_confidence_threshold: float = 0.7
+
+    feedback_port: int = 8100
 
 
 @lru_cache(maxsize=1)
