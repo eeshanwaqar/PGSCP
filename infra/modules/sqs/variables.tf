@@ -4,7 +4,7 @@ variable "name_prefix" {
 }
 
 variable "queue_name" {
-  description = "Short queue suffix (e.g. `events`, `investigations`). Final name = `${name_prefix}-${queue_name}`."
+  description = "Short queue suffix (e.g. `events`, `investigations`). Final name is `<name_prefix>-<queue_name>`."
   type        = string
 }
 

@@ -1,18 +1,18 @@
 #
-# Security groups — SG-to-SG references only, no CIDRs except for the public
+# Security groups - SG-to-SG references only, no CIDRs except for the public
 # ALB which must accept HTTPS from the internet.
 #
 # Shape:
-#   alb_sg      — public HTTPS → ALB
-#   api_sg      — ALB → API    (container port)
-#   worker_sg   — egress only; receives no inbound traffic
-#   rds_sg      — api_sg + worker_sg → RDS on db_port
-#   vpc_endpoints_sg — api_sg + worker_sg → interface endpoints on 443
+#   alb_sg      - public HTTPS toALB
+#   api_sg      - ALB to API    (container port)
+#   worker_sg   - egress only; receives no inbound traffic
+#   rds_sg      - api_sg + worker_sg to RDS on db_port
+#   vpc_endpoints_sg - api_sg + worker_sg to interface endpoints on 443
 #
 
 resource "aws_security_group" "alb" {
   name        = "${var.name_prefix}-alb-sg"
-  description = "ALB — public HTTPS in, API egress out"
+  description = "ALB - public HTTPS in, API egress out"
   vpc_id      = aws_vpc.this.id
 
   tags = {
@@ -40,7 +40,7 @@ resource "aws_vpc_security_group_egress_rule" "alb_all" {
 
 resource "aws_security_group" "api" {
   name        = "${var.name_prefix}-api-sg"
-  description = "API task — receives ALB traffic, talks to AWS APIs"
+  description = "API task - receives ALB traffic, talks to AWS APIs"
   vpc_id      = aws_vpc.this.id
 
   tags = {
@@ -50,7 +50,7 @@ resource "aws_security_group" "api" {
 
 resource "aws_vpc_security_group_ingress_rule" "api_from_alb" {
   security_group_id            = aws_security_group.api.id
-  description                  = "ALB → API container port"
+  description                  = "ALB to API container port"
   ip_protocol                  = "tcp"
   from_port                    = var.api_container_port
   to_port                      = var.api_container_port
@@ -68,7 +68,7 @@ resource "aws_vpc_security_group_egress_rule" "api_all" {
 
 resource "aws_security_group" "worker" {
   name        = "${var.name_prefix}-worker-sg"
-  description = "Worker task — no inbound; egress to AWS APIs + partner"
+  description = "Worker task - no inbound; egress to AWS APIs + partner"
   vpc_id      = aws_vpc.this.id
 
   tags = {
@@ -87,7 +87,7 @@ resource "aws_vpc_security_group_egress_rule" "worker_all" {
 
 resource "aws_security_group" "investigator" {
   name        = "${var.name_prefix}-investigator-sg"
-  description = "Investigator task — no inbound from internet; feedback port from VPC only"
+  description = "Investigator task - no inbound from internet; feedback port from VPC only"
   vpc_id      = aws_vpc.this.id
 
   tags = {
@@ -106,7 +106,7 @@ resource "aws_vpc_security_group_egress_rule" "investigator_all" {
 
 resource "aws_security_group" "rds" {
   name        = "${var.name_prefix}-rds-sg"
-  description = "RDS — accepts DB traffic from api/worker/investigator only"
+  description = "RDS - accepts DB traffic from api/worker/investigator only"
   vpc_id      = aws_vpc.this.id
 
   tags = {
@@ -116,7 +116,7 @@ resource "aws_security_group" "rds" {
 
 resource "aws_vpc_security_group_ingress_rule" "rds_from_api" {
   security_group_id            = aws_security_group.rds.id
-  description                  = "API → RDS"
+  description                  = "API to RDS"
   ip_protocol                  = "tcp"
   from_port                    = var.db_port
   to_port                      = var.db_port
@@ -125,7 +125,7 @@ resource "aws_vpc_security_group_ingress_rule" "rds_from_api" {
 
 resource "aws_vpc_security_group_ingress_rule" "rds_from_worker" {
   security_group_id            = aws_security_group.rds.id
-  description                  = "Worker → RDS"
+  description                  = "Worker to RDS"
   ip_protocol                  = "tcp"
   from_port                    = var.db_port
   to_port                      = var.db_port
@@ -134,7 +134,7 @@ resource "aws_vpc_security_group_ingress_rule" "rds_from_worker" {
 
 resource "aws_vpc_security_group_ingress_rule" "rds_from_investigator" {
   security_group_id            = aws_security_group.rds.id
-  description                  = "Investigator → RDS"
+  description                  = "Investigator to RDS"
   ip_protocol                  = "tcp"
   from_port                    = var.db_port
   to_port                      = var.db_port
@@ -145,7 +145,7 @@ resource "aws_vpc_security_group_ingress_rule" "rds_from_investigator" {
 
 resource "aws_security_group" "vpc_endpoints" {
   name        = "${var.name_prefix}-vpc-endpoints-sg"
-  description = "Interface endpoints — 443 from app tasks"
+  description = "Interface endpoints - 443 from app tasks"
   vpc_id      = aws_vpc.this.id
 
   tags = {
@@ -155,7 +155,7 @@ resource "aws_security_group" "vpc_endpoints" {
 
 resource "aws_vpc_security_group_ingress_rule" "endpoints_from_api" {
   security_group_id            = aws_security_group.vpc_endpoints.id
-  description                  = "API → interface endpoint 443"
+  description                  = "API to interface endpoint 443"
   ip_protocol                  = "tcp"
   from_port                    = 443
   to_port                      = 443
@@ -164,7 +164,7 @@ resource "aws_vpc_security_group_ingress_rule" "endpoints_from_api" {
 
 resource "aws_vpc_security_group_ingress_rule" "endpoints_from_worker" {
   security_group_id            = aws_security_group.vpc_endpoints.id
-  description                  = "Worker → interface endpoint 443"
+  description                  = "Worker to interface endpoint 443"
   ip_protocol                  = "tcp"
   from_port                    = 443
   to_port                      = 443
@@ -173,7 +173,7 @@ resource "aws_vpc_security_group_ingress_rule" "endpoints_from_worker" {
 
 resource "aws_vpc_security_group_ingress_rule" "endpoints_from_investigator" {
   security_group_id            = aws_security_group.vpc_endpoints.id
-  description                  = "Investigator → interface endpoint 443"
+  description                  = "Investigator to interface endpoint 443"
   ip_protocol                  = "tcp"
   from_port                    = 443
   to_port                      = 443

@@ -431,3 +431,4 @@ def _post_to_slack(report: InvestigationReport) -> None:
             client.post(s.slack_webhook_url, json=body)
     except Exception as exc:
         log.warning("investigation.slack_post_failed", error=str(exc))
+        
