@@ -2,9 +2,20 @@
 # Dev environment root — wires all modules shipped so far.
 #
 # Phase 2: network, vpc_endpoints, s3, iam
-# Phase 3: secrets, sqs (events + investigations), rds  ← added in this commit
-# Phase 4+: ecr, alb, cloudfront, ecs_service, cloudwatch, cloudtrail
+# Phase 3: secrets, sqs (events + investigations), rds
+# Phase 4 slice 2: ecs_cluster, ecs_service_worker (reads image from dev-shared)
+# Phase 4+: alb, cloudfront, api + investigator services, cloudwatch, cloudtrail
 #
+
+# Long-lived resources (ECR) live in the dev-shared state, read-only here.
+data "terraform_remote_state" "dev_shared" {
+  backend = "s3"
+  config = {
+    bucket = "pgscp-tfstate-830101142420"
+    key    = "envs/dev-shared/terraform.tfstate"
+    region = var.aws_region
+  }
+}
 
 module "network" {
   source = "../../modules/network"
@@ -123,4 +134,63 @@ module "iam" {
   api_log_group_arn          = ""
   worker_log_group_arn       = ""
   investigator_log_group_arn = ""
+}
+
+# --------------------------------------------------------------------------- #
+#  Phase 4 slice 2 — ECS cluster + worker service
+# --------------------------------------------------------------------------- #
+
+module "ecs_cluster" {
+  source = "../../modules/ecs_cluster"
+
+  name_prefix = var.name_prefix
+}
+
+module "ecs_service_worker" {
+  source = "../../modules/ecs_service"
+
+  name_prefix  = var.name_prefix
+  service_name = "worker"
+  aws_region   = var.aws_region
+  cluster_id   = module.ecs_cluster.cluster_id
+
+  image         = "${data.terraform_remote_state.dev_shared.outputs.ecr_repository_urls.worker}:latest"
+  cpu           = 256
+  memory        = 512
+  desired_count = 1
+
+  task_role_arn      = module.iam.worker_task_role_arn
+  execution_role_arn = module.iam.task_execution_role_arn
+
+  subnet_ids         = module.network.private_app_subnet_ids
+  security_group_ids = [module.network.worker_security_group_id]
+  assign_public_ip   = false
+
+  environment = {
+    PGSCP_ENV                       = "dev"
+    PGSCP_AWS_REGION                = var.aws_region
+    PGSCP_S3_RAW_BUCKET             = module.s3.raw_bucket_name
+    PGSCP_SQS_QUEUE_URL             = module.sqs_events.queue_url
+    PGSCP_INVESTIGATIONS_QUEUE_URL  = module.sqs_investigations.queue_url
+    PGSCP_DB_HOST                   = module.rds.db_instance_address
+    PGSCP_DB_PORT                   = tostring(module.rds.db_instance_port)
+    PGSCP_DB_NAME                   = module.rds.db_name
+    PGSCP_LOG_LEVEL                 = "INFO"
+    # Partner delivery disabled in dev-AWS (no mock-partner here). Worker
+    # still evaluates rules and writes alerts to Postgres; partner rows
+    # simply are not created.
+    PGSCP_SLACK_WEBHOOK_URL = ""
+    PGSCP_PAGERDUTY_URL     = ""
+  }
+
+  # Secrets injected at task start. Values here are ARNs; `arn:::username::`
+  # extracts the `username` JSON field from the RDS-managed master secret.
+  secrets = {
+    PGSCP_DB_USER         = "${module.rds.master_user_secret_arn}:username::"
+    PGSCP_DB_PASSWORD     = "${module.rds.master_user_secret_arn}:password::"
+    PGSCP_HMAC_SIGNING_KEY = module.secrets.hmac_signing_key_arn
+  }
+
+  log_retention_days     = 7
+  enable_execute_command = false
 }

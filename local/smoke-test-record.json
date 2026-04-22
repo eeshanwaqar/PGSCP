@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1",
+  "request_id": "aws-slice2-001",
+  "timestamp": "2026-04-22T22:10:00Z",
+  "model": "gpt-4o-mini",
+  "provider": "openai",
+  "prompt": "Tell me about AWS Fargate.",
+  "completion": "Fargate runs containers without managing servers. Reach me at test@example.com for details.",
+  "prompt_tokens": 10,
+  "completion_tokens": 20,
+  "latency_ms": 5000,
+  "cost_usd": 0.90,
+  "expected_label": "aws",
+  "predicted_label": "aws",
+  "tags": {"test": "slice2-worker"}
+}

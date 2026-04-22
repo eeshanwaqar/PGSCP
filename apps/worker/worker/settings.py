@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,9 +18,16 @@ class Settings(BaseSettings):
     sqs_queue_url: str = ""
     investigations_queue_url: str = ""
 
-    # Postgres connection (sync). In AWS, the DSN is constructed at startup from
-    # Secrets Manager; locally it comes from docker-compose env.
+    # Postgres — either a full DSN (local dev) or individual parts (AWS, where
+    # the RDS-managed secret delivers user+password separately from the host).
+    # When `db_user` and `db_host` are both set, they take precedence and
+    # `db_dsn` is rebuilt from the parts.
     db_dsn: str = "postgresql+psycopg://pgscp:pgscp@postgres:5432/pgscp"
+    db_user: str = ""
+    db_password: str = ""
+    db_host: str = ""
+    db_port: int = 5432
+    db_name: str = "pgscp"
 
     # Rule thresholds — deliberately tunable via env for incident simulations.
     latency_breach_ms: int = 1500
@@ -37,6 +45,15 @@ class Settings(BaseSettings):
     sqs_wait_time_seconds: int = 20
     sqs_visibility_timeout: int = 60
     sqs_max_messages: int = 10
+
+    @model_validator(mode="after")
+    def _build_dsn_from_parts(self) -> "Settings":
+        if self.db_user and self.db_host:
+            self.db_dsn = (
+                f"postgresql+psycopg://{self.db_user}:{self.db_password}"
+                f"@{self.db_host}:{self.db_port}/{self.db_name}"
+            )
+        return self
 
 
 @lru_cache(maxsize=1)

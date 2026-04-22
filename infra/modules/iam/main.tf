@@ -192,9 +192,16 @@ data "aws_iam_policy_document" "worker_task" {
   }
 
   statement {
-    sid       = "KmsDecryptRaw"
-    effect    = "Allow"
-    actions   = ["kms:Decrypt", "kms:DescribeKey"]
+    sid    = "KmsAppKeyReadWrite"
+    effect = "Allow"
+    actions = [
+      "kms:Decrypt",
+      "kms:DescribeKey",
+      # Needed to encrypt outgoing SQS messages on the (KMS-encrypted)
+      # investigations queue and any future writes under the app CMK.
+      "kms:GenerateDataKey",
+      "kms:GenerateDataKeyWithoutPlaintext",
+    ]
     resources = [var.app_kms_key_arn]
   }
 
