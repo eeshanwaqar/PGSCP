@@ -284,23 +284,58 @@ data "aws_iam_policy_document" "investigator_task" {
     resources = var.bedrock_model_arns
   }
 
-  dynamic "statement" {
-    for_each = var.api_log_group_arn == "" && var.worker_log_group_arn == "" ? [] : [1]
-    content {
-      sid    = "QueryPeerLogs"
-      effect = "Allow"
-      actions = [
-        "logs:StartQuery",
-        "logs:GetQueryResults",
-        "logs:StopQuery",
-        "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams",
-      ]
-      resources = compact([
-        var.api_log_group_arn == "" ? "" : "${var.api_log_group_arn}:*",
-        var.worker_log_group_arn == "" ? "" : "${var.worker_log_group_arn}:*",
-      ])
+  # The investigator's `tools/ecs.py` calls DescribeServices/Tasks during
+  # `gather_context` to correlate alerts with recent deploys. Scoped to the
+  # cluster by ARN; the cluster itself is narrow enough that allowing the
+  # read APIs on all services within it is reasonable.
+  statement {
+    sid    = "DescribeOwnEcsCluster"
+    effect = "Allow"
+    actions = [
+      "ecs:DescribeServices",
+      "ecs:ListServices",
+      "ecs:DescribeTasks",
+      "ecs:ListTasks",
+      "ecs:DescribeTaskDefinition",
+    ]
+    resources = ["*"]
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = ["arn:aws:ecs:${var.aws_region}:${local.account_id}:cluster/${var.name_prefix}"]
     }
+  }
+
+  # `DescribeTaskDefinition` + `ListServices` don't support the ecs:cluster
+  # condition key, so they need a separate unconditional statement. Still
+  # scoped to our own task-definition name prefix.
+  statement {
+    sid    = "DescribeOwnTaskDefinitions"
+    effect = "Allow"
+    actions = [
+      "ecs:DescribeTaskDefinition",
+      "ecs:ListServices",
+    ]
+    resources = ["*"]
+  }
+
+  # Logs Insights across the api/worker log groups for trace-id correlation.
+  # Wildcard on the log-group name avoids a circular dep on ecs_service
+  # outputs (ecs_service depends on iam for task roles).
+  statement {
+    sid    = "QueryPeerLogs"
+    effect = "Allow"
+    actions = [
+      "logs:StartQuery",
+      "logs:GetQueryResults",
+      "logs:StopQuery",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams",
+    ]
+    resources = [
+      "arn:aws:logs:${var.aws_region}:${local.account_id}:log-group:/pgscp/${var.name_prefix}/*",
+      "arn:aws:logs:${var.aws_region}:${local.account_id}:log-group:/pgscp/${var.name_prefix}/*:*",
+    ]
   }
 
   dynamic "statement" {

@@ -5,7 +5,8 @@
 # Phase 3: secrets, sqs (events + investigations), rds
 # Phase 4 slice 2: ecs_cluster, ecs_service_worker (reads image from dev-shared)
 # Phase 4 slice 3: alb, ecs_service_api (public ingestion endpoint)
-# Phase 4+: cloudfront, investigator service, cloudwatch, cloudtrail
+# Phase 4 slice 4: ecs_service_investigator (LangGraph investigator + feedback endpoint)
+# Phase 4+: cloudfront, cloudwatch, cloudtrail
 #
 
 # Long-lived resources (ECR) live in the dev-shared state, read-only here.
@@ -261,4 +262,63 @@ module "ecs_service_api" {
     "CMD-SHELL",
     "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://127.0.0.1:8000/health\", timeout=2).status==200 else 1)'",
   ]
+}
+
+# --------------------------------------------------------------------------- #
+#  Phase 4 slice 4 -- Investigator service
+# --------------------------------------------------------------------------- #
+
+module "ecs_service_investigator" {
+  source = "../../modules/ecs_service"
+
+  name_prefix  = var.name_prefix
+  service_name = "investigator"
+  aws_region   = var.aws_region
+  cluster_id   = module.ecs_cluster.cluster_id
+
+  image         = "${data.terraform_remote_state.dev_shared.outputs.ecr_repository_urls.investigator}:latest"
+  cpu           = 512
+  memory        = 1024
+  desired_count = 1
+
+  task_role_arn      = module.iam.investigator_task_role_arn
+  execution_role_arn = module.iam.task_execution_role_arn
+
+  subnet_ids         = module.network.private_app_subnet_ids
+  security_group_ids = [module.network.investigator_security_group_id]
+  assign_public_ip   = false
+
+  # Feedback server is internal-only for now; no ALB exposure. Container
+  # still binds 8100 for in-VPC reachability.
+  container_port = 0
+
+  environment = {
+    PGSCP_ENV                      = "dev"
+    PGSCP_AWS_REGION               = var.aws_region
+    PGSCP_S3_RAW_BUCKET            = module.s3.raw_bucket_name
+    PGSCP_INVESTIGATIONS_QUEUE_URL = module.sqs_investigations.queue_url
+    PGSCP_DB_HOST                  = module.rds.db_instance_address
+    PGSCP_DB_PORT                  = tostring(module.rds.db_instance_port)
+    PGSCP_DB_NAME                  = module.rds.db_name
+    PGSCP_LOG_LEVEL                = "INFO"
+    # Deterministic scripted LLM backend keeps slice 4 free of Bedrock model
+    # approval + API costs. Switch to `bedrock` in a later phase.
+    PGSCP_LLM_BACKEND              = "scripted"
+    PGSCP_CLOUDWATCH_API_LOG_GROUP    = "/pgscp/${var.name_prefix}/api"
+    PGSCP_CLOUDWATCH_WORKER_LOG_GROUP = "/pgscp/${var.name_prefix}/worker"
+    PGSCP_ECS_CLUSTER                 = module.ecs_cluster.cluster_name
+    PGSCP_GRAPH_VERIFY_MAX_LOOPS      = "2"
+    PGSCP_GRAPH_CONFIDENCE_THRESHOLD  = "0.7"
+    PGSCP_FEEDBACK_PORT               = "8100"
+  }
+
+  secrets = {
+    PGSCP_DB_USER           = "${module.rds.master_user_secret_arn}:username::"
+    PGSCP_DB_PASSWORD       = "${module.rds.master_user_secret_arn}:password::"
+    PGSCP_SLACK_WEBHOOK_URL = module.secrets.slack_webhook_url_arn
+    PGSCP_HMAC_SIGNING_KEY  = module.secrets.hmac_signing_key_arn
+  }
+
+  log_retention_days     = 7
+  enable_execute_command = false
 }
