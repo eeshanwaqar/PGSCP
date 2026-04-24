@@ -106,3 +106,17 @@ output "db_master_user_secret_arn" {
   description = "RDS-managed Secrets Manager entry holding the master credentials."
   value       = module.rds.master_user_secret_arn
 }
+
+# --------------------------------------------------------------------------- #
+#  ALB (Phase 4 slice 3)
+# --------------------------------------------------------------------------- #
+
+output "alb_dns_name" {
+  description = "Public DNS of the ingestion ALB. `curl http://<value>/health` to smoke-test."
+  value       = module.alb.alb_dns_name
+}
+
+output "alb_url" {
+  description = "Full URL for convenience."
+  value       = "http://${module.alb.alb_dns_name}"
+}

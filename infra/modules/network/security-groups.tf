@@ -29,6 +29,17 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   cidr_ipv4         = "0.0.0.0/0"
 }
 
+# HTTP is open for dev testing before an ACM cert is attached. When HTTPS is
+# wired, drop this rule or swap for an HTTP-to-HTTPS redirect on the ALB.
+resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+  security_group_id = aws_security_group.alb.id
+  description       = "Public HTTP (dev only, pre-TLS)"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
 resource "aws_vpc_security_group_egress_rule" "alb_all" {
   security_group_id = aws_security_group.alb.id
   description       = "ALB may reach API targets"

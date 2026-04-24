@@ -4,7 +4,8 @@
 # Phase 2: network, vpc_endpoints, s3, iam
 # Phase 3: secrets, sqs (events + investigations), rds
 # Phase 4 slice 2: ecs_cluster, ecs_service_worker (reads image from dev-shared)
-# Phase 4+: alb, cloudfront, api + investigator services, cloudwatch, cloudtrail
+# Phase 4 slice 3: alb, ecs_service_api (public ingestion endpoint)
+# Phase 4+: cloudfront, investigator service, cloudwatch, cloudtrail
 #
 
 # Long-lived resources (ECR) live in the dev-shared state, read-only here.
@@ -193,4 +194,71 @@ module "ecs_service_worker" {
 
   log_retention_days     = 7
   enable_execute_command = false
+}
+
+# --------------------------------------------------------------------------- #
+#  Phase 4 slice 3 -- ALB + API service
+# --------------------------------------------------------------------------- #
+
+module "alb" {
+  source = "../../modules/alb"
+
+  name_prefix        = var.name_prefix
+  vpc_id             = module.network.vpc_id
+  public_subnet_ids  = module.network.public_subnet_ids
+  security_group_ids = [module.network.alb_security_group_id]
+
+  target_port       = 8000
+  listener_port     = 80
+  listener_protocol = "HTTP"
+  health_check_path = "/health"
+}
+
+module "ecs_service_api" {
+  source = "../../modules/ecs_service"
+
+  name_prefix  = var.name_prefix
+  service_name = "api"
+  aws_region   = var.aws_region
+  cluster_id   = module.ecs_cluster.cluster_id
+
+  image         = "${data.terraform_remote_state.dev_shared.outputs.ecr_repository_urls.api}:latest"
+  cpu           = 256
+  memory        = 512
+  desired_count = 1
+
+  task_role_arn      = module.iam.api_task_role_arn
+  execution_role_arn = module.iam.task_execution_role_arn
+
+  subnet_ids         = module.network.private_app_subnet_ids
+  security_group_ids = [module.network.api_security_group_id]
+  assign_public_ip   = false
+
+  container_port = 8000
+
+  load_balancer = {
+    target_group_arn = module.alb.target_group_arn
+    container_name   = "api"
+    container_port   = 8000
+  }
+
+  environment = {
+    PGSCP_ENV           = "dev"
+    PGSCP_AWS_REGION    = var.aws_region
+    PGSCP_S3_RAW_BUCKET = module.s3.raw_bucket_name
+    PGSCP_SQS_QUEUE_URL = module.sqs_events.queue_url
+    PGSCP_LOG_LEVEL     = "INFO"
+  }
+
+  # API reads no secrets at runtime -- the sensitive data (HMAC signing key,
+  # partner creds) is only needed by the worker.
+  secrets = {}
+
+  log_retention_days     = 7
+  enable_execute_command = false
+
+  health_check_command = [
+    "CMD-SHELL",
+    "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://127.0.0.1:8000/health\", timeout=2).status==200 else 1)'",
+  ]
 }
