@@ -1,0 +1,178 @@
+#
+# Terraform Plan on PR
+#
+# Runs `terraform fmt -check` and `terraform plan` for every Terraform root
+# touched by a PR (or every root, if shared modules changed), then posts the
+# plan output as a PR comment. Read-only: never applies.
+#
+# Authentication: GitHub OIDC → the `pgscp-github-oidc` role provisioned by
+# `infra/bootstrap`. No long-lived AWS credentials in GitHub secrets.
+#
+# How to extend:
+#   - Add a new Terraform root by appending to the matrix.
+#   - Add `envs/prod` here when it exists, following the dev pattern.
+#
+# Debugging:
+#   - If plan fails with "Error acquiring the state lock", an in-progress apply
+#     is running; wait it out or use `terraform force-unlock` locally.
+#   - If the comment is truncated, the plan is >50k chars; view the full plan
+#     in the Action run logs.
+#
+
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+      - '.github/workflows/terraform-plan.yml'
+
+# OIDC requires id-token:write; checkout needs contents:read;
+# pull-requests:write lets us comment.
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: terraform-plan-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "830101142420"
+  TF_STATE_BUCKET: pgscp-tfstate-830101142420
+  TF_STATE_KMS_KEY: arn:aws:kms:us-east-1:830101142420:key/36fe1cfb-6aed-4bda-819e-0465a8d062d1
+  TF_VERSION: 1.9.8
+  # Silence provider telemetry
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  plan:
+    name: Plan ${{ matrix.root.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        root:
+          - label: bootstrap
+            path: infra/bootstrap
+            uses_remote_state: false
+            extra_plan_vars: >-
+              -var=state_bucket_name=pgscp-tfstate-830101142420
+              -var=github_repository=eeshanwaqar/PGSCP
+          - label: dev-shared
+            path: infra/envs/dev-shared
+            uses_remote_state: true
+            extra_plan_vars: ""
+          - label: dev
+            path: infra/envs/dev
+            uses_remote_state: true
+            extra_plan_vars: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/pgscp-github-oidc
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform ${{ env.TF_VERSION }}
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        id: fmt
+        working-directory: ${{ matrix.root.path }}
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: terraform init (local state)
+        if: matrix.root.uses_remote_state == false
+        working-directory: ${{ matrix.root.path }}
+        run: terraform init -input=false
+
+      - name: terraform init (remote state)
+        if: matrix.root.uses_remote_state == true
+        working-directory: ${{ matrix.root.path }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="kms_key_id=${TF_STATE_KMS_KEY}"
+
+      - name: terraform validate
+        working-directory: ${{ matrix.root.path }}
+        run: terraform validate -no-color
+
+      - name: terraform plan
+        id: plan
+        working-directory: ${{ matrix.root.path }}
+        run: |
+          set -o pipefail
+          terraform plan \
+            -input=false \
+            -no-color \
+            -lock-timeout=5m \
+            ${{ matrix.root.extra_plan_vars }} \
+            2>&1 | tee plan-output.txt
+        continue-on-error: true
+
+      - name: Post plan to PR
+        uses: actions/github-script@v7
+        env:
+          ROOT_LABEL: ${{ matrix.root.label }}
+          ROOT_PATH: ${{ matrix.root.path }}
+          FMT_OUTCOME: ${{ steps.fmt.outcome }}
+          PLAN_OUTCOME: ${{ steps.plan.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const planFile = path.join(process.env.ROOT_PATH, 'plan-output.txt');
+            const raw = fs.existsSync(planFile)
+              ? fs.readFileSync(planFile, 'utf8')
+              : '(no plan output captured)';
+
+            // GitHub comments cap at 65536 characters; leave room for the wrapper.
+            const MAX = 50000;
+            const body = raw.length > MAX
+              ? raw.slice(0, MAX) + '\n\n... (truncated — see Action run for full plan) ...'
+              : raw;
+
+            const fmtBadge = process.env.FMT_OUTCOME === 'success' ? '✅ fmt' : '⚠️ fmt';
+            const planBadge = process.env.PLAN_OUTCOME === 'success' ? '✅ plan' : '❌ plan';
+            const label = process.env.ROOT_LABEL;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const comment = [
+              `### 🗺️ Terraform plan: \`${label}\``,
+              '',
+              `${fmtBadge} · ${planBadge} · [run logs](${runUrl})`,
+              '',
+              '<details><summary>Plan output</summary>',
+              '',
+              '```hcl',
+              body,
+              '```',
+              '',
+              '</details>',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment,
+            });
+
+      - name: Fail job if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: |
+          echo "terraform plan failed; see comment on the PR for details."
+          exit 1

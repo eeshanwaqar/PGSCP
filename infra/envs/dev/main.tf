@@ -169,15 +169,15 @@ module "ecs_service_worker" {
   assign_public_ip   = false
 
   environment = {
-    PGSCP_ENV                       = "dev"
-    PGSCP_AWS_REGION                = var.aws_region
-    PGSCP_S3_RAW_BUCKET             = module.s3.raw_bucket_name
-    PGSCP_SQS_QUEUE_URL             = module.sqs_events.queue_url
-    PGSCP_INVESTIGATIONS_QUEUE_URL  = module.sqs_investigations.queue_url
-    PGSCP_DB_HOST                   = module.rds.db_instance_address
-    PGSCP_DB_PORT                   = tostring(module.rds.db_instance_port)
-    PGSCP_DB_NAME                   = module.rds.db_name
-    PGSCP_LOG_LEVEL                 = "INFO"
+    PGSCP_ENV                      = "dev"
+    PGSCP_AWS_REGION               = var.aws_region
+    PGSCP_S3_RAW_BUCKET            = module.s3.raw_bucket_name
+    PGSCP_SQS_QUEUE_URL            = module.sqs_events.queue_url
+    PGSCP_INVESTIGATIONS_QUEUE_URL = module.sqs_investigations.queue_url
+    PGSCP_DB_HOST                  = module.rds.db_instance_address
+    PGSCP_DB_PORT                  = tostring(module.rds.db_instance_port)
+    PGSCP_DB_NAME                  = module.rds.db_name
+    PGSCP_LOG_LEVEL                = "INFO"
     # Partner delivery disabled in dev-AWS (no mock-partner here). Worker
     # still evaluates rules and writes alerts to Postgres; partner rows
     # simply are not created.
@@ -188,8 +188,8 @@ module "ecs_service_worker" {
   # Secrets injected at task start. Values here are ARNs; `arn:::username::`
   # extracts the `username` JSON field from the RDS-managed master secret.
   secrets = {
-    PGSCP_DB_USER         = "${module.rds.master_user_secret_arn}:username::"
-    PGSCP_DB_PASSWORD     = "${module.rds.master_user_secret_arn}:password::"
+    PGSCP_DB_USER          = "${module.rds.master_user_secret_arn}:username::"
+    PGSCP_DB_PASSWORD      = "${module.rds.master_user_secret_arn}:password::"
     PGSCP_HMAC_SIGNING_KEY = module.secrets.hmac_signing_key_arn
   }
 
@@ -303,7 +303,7 @@ module "ecs_service_investigator" {
     PGSCP_LOG_LEVEL                = "INFO"
     # Deterministic scripted LLM backend keeps slice 4 free of Bedrock model
     # approval + API costs. Switch to `bedrock` in a later phase.
-    PGSCP_LLM_BACKEND              = "scripted"
+    PGSCP_LLM_BACKEND                 = "scripted"
     PGSCP_CLOUDWATCH_API_LOG_GROUP    = "/pgscp/${var.name_prefix}/api"
     PGSCP_CLOUDWATCH_WORKER_LOG_GROUP = "/pgscp/${var.name_prefix}/worker"
     PGSCP_ECS_CLUSTER                 = module.ecs_cluster.cluster_name
