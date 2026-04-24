@@ -51,23 +51,20 @@ jobs:
   plan:
     name: Plan ${{ matrix.root.label }}
     runs-on: ubuntu-latest
+    # `infra/bootstrap` is intentionally NOT in this matrix. It uses local state
+    # (it bootstraps the bucket that holds everyone else's state), so a fresh
+    # CI runner has no state file and plan would propose to re-create every
+    # already-applied resource. Bootstrap is a one-time manual operation; CI
+    # has no business planning it.
     strategy:
       fail-fast: false
       matrix:
         root:
-          - label: bootstrap
-            path: infra/bootstrap
-            uses_remote_state: false
-            extra_plan_vars: >-
-              -var=state_bucket_name=pgscp-tfstate-830101142420
-              -var=github_repository=eeshanwaqar/PGSCP
           - label: dev-shared
             path: infra/envs/dev-shared
-            uses_remote_state: true
             extra_plan_vars: ""
           - label: dev
             path: infra/envs/dev
-            uses_remote_state: true
             extra_plan_vars: ""
 
     steps:
@@ -92,13 +89,7 @@ jobs:
         run: terraform fmt -check -recursive
         continue-on-error: true
 
-      - name: terraform init (local state)
-        if: matrix.root.uses_remote_state == false
-        working-directory: ${{ matrix.root.path }}
-        run: terraform init -input=false
-
-      - name: terraform init (remote state)
-        if: matrix.root.uses_remote_state == true
+      - name: terraform init
         working-directory: ${{ matrix.root.path }}
         run: |
           terraform init -input=false \
