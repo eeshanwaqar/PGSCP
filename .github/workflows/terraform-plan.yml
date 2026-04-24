@@ -62,10 +62,16 @@ jobs:
         root:
           - label: dev-shared
             path: infra/envs/dev-shared
+            # dev-shared has no required variables.
             extra_plan_vars: ""
           - label: dev
             path: infra/envs/dev
-            extra_plan_vars: ""
+            # Locally these come from a gitignored terraform.tfvars. In CI we
+            # pass them on the command line; they are dev bucket names, not
+            # secrets. Everything else has defaults in variables.tf.
+            extra_plan_vars: >-
+              -var=raw_bucket_name=pgscp-raw-events-dev-830101142420
+              -var=logs_bucket_name=pgscp-logs-dev-830101142420
 
     steps:
       - name: Checkout
