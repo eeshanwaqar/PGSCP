@@ -13,9 +13,14 @@ infra/
     secrets/          # HMAC key (random), Slack webhook URL, PagerDuty routing key
     sqs/              # generic main queue + DLQ + redrive (instantiated per logical queue)
     rds/              # Postgres 16 — private data subnets, KMS, RDS-managed master password
-    # Phase 4+ will add: ecr/ alb/ cloudfront/ ecs_service/ cloudwatch/ cloudtrail/
+    ecr/              # private container registries (persistent across dev teardowns)
+    ecs_cluster/      # Fargate cluster with Container Insights
+    ecs_service/      # generic task-def + service + log group (used by api / worker / investigator)
+    alb/              # Application Load Balancer + target group + HTTP listener
+    # Phase 4+ will add: cloudfront/ cloudwatch/ cloudtrail/
   envs/
-    dev/              # wired against dev AWS account
+    dev-shared/       # long-lived ECR; persists across dev teardowns
+    dev/              # ephemeral app infra (spin up / destroy per session)
     prod/             # placeholder; mirrors dev with stricter guards (later)
 ```
 
@@ -25,8 +30,10 @@ Implemented so far:
 
 - **Phase 2** — bootstrap + network + vpc_endpoints + s3 + iam.
 - **Phase 3** — secrets + sqs (events + investigations) + rds. IAM module rewired with real ARNs.
+- **Phase 4** — ecr (dev-shared), ecs_cluster, ecs_service, alb. Full api + worker + investigator pipeline running on Fargate.
+- **Phase 5 (in progress)** — [`.github/workflows/terraform-plan.yml`](../.github/workflows/terraform-plan.yml) runs `fmt + init + validate + plan` for every Terraform root touched by a PR, using GitHub OIDC to assume the `pgscp-github-oidc` role (no long-lived AWS secrets in the repo).
 
-Phases 4–7 are planned in [docs/plan.md](../docs/plan.md) and layer on top of this foundation without rewriting it.
+Phases 5–7 continue in [docs/plan.md](../docs/plan.md) and layer on top of this foundation without rewriting it.
 
 ## First-time apply
 
