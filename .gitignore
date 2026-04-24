@@ -42,3 +42,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Accidentally-committed nested clone at repo root (not part of the project)
+/PGSCP/
