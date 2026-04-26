@@ -133,5 +133,21 @@ services:
       mock-partner:
         condition: service_healthy
 
+  dashboard:
+    build:
+      context: ../apps/dashboard
+    environment:
+      PGSCP_ENV: local
+      PGSCP_LOG_LEVEL: INFO
+      PGSCP_DB_DSN: postgresql+psycopg://pgscp:pgscp@postgres:5432/pgscp
+      PGSCP_INVESTIGATOR_FEEDBACK_URL: http://investigator:8100
+    ports:
+      - "8501:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      investigator:
+        condition: service_started
+
 volumes:
   postgres-data:
