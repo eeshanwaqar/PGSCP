@@ -1,5 +1,31 @@
 # PGSCP — Production-Grade Secure Cloud Platform
 
+## Status (2026-04-27)
+
+The substance of the project is shipped. Verified end-to-end on real AWS:
+a single `curl` to a public ALB exercises ingestion → S3 → SQS → worker rule
+engine → Postgres → SQS → LangGraph investigator → reports + Slack delivery.
+
+| Phase | Status | Evidence |
+|---|---|---|
+| 0 — Repo foundation | ✅ | commit `0265179` |
+| 1 — App services, local-first | ✅ | commit `a219fae`; verified end-to-end |
+| 2 — TF bootstrap + network + shared | ✅ | commits `dd23853`/`d421ff2`; applied + destroyed cleanly |
+| 3 — Data + secrets + queue | ✅ | same commits as Phase 2 |
+| 4 — Compute + traffic (ECS, ALB, all 3 services) | ✅ | commits `481e86a`/`3078491`/`55e8d2b`; public `curl` verified |
+| 5 — CI/CD | 🟡 slice 1 of 4 | commit `aa71d9b`/`51f030d`; `terraform-plan` workflow green on PR |
+| 6 — Observability + reliability | ❌ deferred | — |
+| 7 — Incident simulations + 1 postmortem | ❌ deferred | — |
+| 7.5 — Interview defense + compliance docs | 🟡 partial | `docs/defense-notes.md` + ADRs 0003/0004 done; OWASP/ISO mappings deferred |
+| 8 — LangGraph investigator (added mid-flight) | ✅ | commit `a219fae`; verified on AWS |
+| Bonus — Streamlit dashboard | ✅ | commit `1e74513` |
+
+**Deliberate cuts:** Phase 5 slices 2-4 (image-build/apply/deploy CI),
+Phase 6 OTel/X-Ray, Phase 7 multi-incident sim, OWASP/ISO mappings.
+See [README.md](../README.md) for the rationale.
+
+---
+
 ## Context
 
 Portfolio project to prove Cloud Engineer ownership end-to-end: AWS infra via Terraform, secure CI/CD, IAM least-privilege, observability, reliability, incident response. Two blueprints reviewed (Cloud Engineer Project Blueprint + PGSCP). PGSCP is the authoritative design; this plan synthesizes both into an executable build order.
@@ -124,12 +150,12 @@ pgscp/
 
 ## Implementation phases
 
-### Phase 0 — Repo foundation (½ day)
+### Phase 0 — Repo foundation (½ day) ✅ shipped
 - `git init`, create tree above, `.gitignore`, `.editorconfig`, `pre-commit` (ruff, terraform fmt, tflint, gitleaks).
 - README stub with architecture diagram placeholder.
 - ADR template + write ADR-001 (ECS vs EKS), ADR-002 (SQS vs Kafka).
 
-### Phase 1 — App services, local-first (Week A–B)
+### Phase 1 — App services, local-first (Week A–B) ✅ shipped
 
 **API (`apps/api`)** — FastAPI
 - Endpoints:
@@ -168,32 +194,32 @@ pgscp/
 
 **Tests**: unit tests for each rule, dedupe, partner client retry/CB. Integration test using LocalStack SQS + a throwaway Postgres.
 
-### Phase 2 — Terraform bootstrap + network + shared (Week C start)
+### Phase 2 — Terraform bootstrap + network + shared (Week C start) ✅ shipped
 - `infra/bootstrap/`: S3 tfstate bucket (versioning, SSE-KMS, public access block), KMS key, IAM OIDC provider for GitHub, `pgscp-github-oidc` role scoped to repo/branch.
 - `modules/network/`: VPC, 2 AZs, public + private-app + private-data subnets, IGW, 1 NAT (dev) / 2 NAT (prod), route tables, security groups (alb-sg, api-sg, worker-sg, rds-sg with SG-to-SG rules only).
 - `modules/vpc_endpoints/`: S3 gateway + interface endpoints for ECR api/dkr, Secrets Manager, CloudWatch Logs, SQS.
 - `modules/s3/`: `pgscp-raw-events-<env>`, `pgscp-logs-<env>`; SSE-KMS, versioning, lifecycle to Glacier after 30d on raw bucket, block-public-access.
 - `modules/iam/`: ECS task execution role (pull ECR, write logs), API task role (s3:PutObject scoped to raw prefix, sqs:SendMessage scoped to queue ARN, secretsmanager:GetSecretValue scoped to `pgscp/*`), worker task role (sqs consume, s3 get, secrets get, rds connect via secret).
 
-### Phase 3 — Data + secrets + queue (Week C end)
+### Phase 3 — Data + secrets + queue (Week C end) ✅ shipped
 - `modules/secrets/`: Secrets Manager entries for db creds (with rotation Lambda stub), partner API key, HMAC signing secret.
 - `modules/rds/`: Postgres 16, encrypted (KMS), not publicly accessible, private data subnet group, SG allows only from worker-sg and api-sg, Multi-AZ=false in dev / true in prod, 7-day backups.
 - `modules/sqs/`: main queue + DLQ with `maxReceiveCount=5`, KMS encryption, long-polling defaults.
 
-### Phase 4 — Compute + traffic (Week D)
+### Phase 4 — Compute + traffic (Week D) ✅ shipped (slices 1-4: ECR, ECS cluster, worker, API+ALB, investigator)
 - `modules/ecr/`: two repos (`api`, `worker`), immutable tags, scan-on-push.
 - `modules/alb/`: ALB in public subnets, HTTPS listener with ACM cert, target group for API (health check `/health`), access logs → logs bucket.
 - `modules/cloudfront/`: distribution with ALB origin + custom secret header; ALB listener rule rejects requests missing the header.
 - `modules/ecs_service/` (reusable for api + worker): task definition with awslogs driver, task+execution role wiring, secrets injected via `secrets` block from Secrets Manager ARNs, `deployment_circuit_breaker { enable = true, rollback = true }`, service autoscaling on CPU + SQS depth (worker).
 
-### Phase 5 — CI/CD (Week E)
+### Phase 5 — CI/CD (Week E) 🟡 slice 1 of 4 (terraform-plan on PR shipped; image-build/apply/deploy slices deferred)
 - `.github/workflows/ci.yml`: lint (ruff, terraform fmt, tflint), unit tests, build image, trivy scan, push to ECR tagged with commit SHA on `main`.
 - `terraform-plan.yml`: on PR, OIDC assume role, `terraform plan` for dev, post plan as PR comment.
 - `deploy-dev.yml`: on push to `main`, apply dev, update ECS service with new image, run smoke tests against ALB DNS.
 - `deploy-prod.yml`: manual dispatch, `environment: production` (GitHub protection rule requires approval), apply prod.
 - No static AWS keys in GitHub — OIDC only.
 
-### Phase 6 — Observability + reliability (Week E-F)
+### Phase 6 — Observability + reliability (Week E-F) ❌ deferred
 - `modules/cloudwatch/`: log groups (retention 14d dev / 30d prod), metric filters, dashboards (API health, queue/worker health, DB health, partner integration, business alerts/hr), alarms:
   - API 5xx > 1% for 5 min
   - API p95 > 500ms for 10 min
@@ -206,7 +232,7 @@ pgscp/
 - ADOT collector sidecar (or managed) shipping traces to X-Ray; trace context propagated via SQS message attributes (`traceparent`).
 - Runbooks written: deployment, rollback, partner outage, queue backlog, DB access issue.
 
-### Phase 7 — Incident simulations + docs (Week F)
+### Phase 7 — Incident simulations + docs (Week F) ❌ deferred
 Execute and document all four:
 1. **Queue backlog explosion** — throttle worker, watch alarm fire, scale out, drain.
 2. **Partner API outage** — flip mock-partner (Slack) to 500s, show retries/backoff/circuit breaker, redrive strategy after recovery.
@@ -217,7 +243,7 @@ Execute and document all four:
 
 Also ship ADR-0005 (least-privilege tightening story: start permissive, iteratively narrow using IAM Access Analyzer, commit the diffs as evidence of the process).
 
-### Phase 7.5 — Interview defense + compliance docs (½ day, concurrent with Phase 7)
+### Phase 7.5 — Interview defense + compliance docs (½ day, concurrent with Phase 7) 🟡 partial (defense-notes + ADRs 0003/0004 done; OWASP/ISO mappings deferred)
 
 These are cheap but high-leverage — they convert the repo into direct interview ammunition.
 
