@@ -1,0 +1,22 @@
+[project]
+name = "pgscp-dashboard"
+version = "0.1.0"
+description = "PGSCP investigations dashboard (Streamlit)."
+requires-python = ">=3.12"
+dependencies = [
+    "streamlit~=1.39",
+    "sqlalchemy~=2.0",
+    "psycopg[binary]~=3.2",
+    "httpx~=0.27",
+    "pydantic~=2.7",
+    "pydantic-settings~=2.5",
+    "pandas~=2.2",
+    "structlog~=24.4",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pgscp_dashboard*"]
